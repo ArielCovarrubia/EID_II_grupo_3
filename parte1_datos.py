@@ -68,3 +68,27 @@ def calcular_limite(
         and abs(sumas_parciales[-1] - sumas_parciales[-2]) < tolerancia
     )
     return limite, convergio
+
+TERMINOS = {
+    "A": lambda i, p: i * (1 - p) ** (i - 1) * p,
+    "B": lambda i, p: (1 / i) * (1 - p) ** (i - 1) * p,
+    "C": lambda i, p: (i + 1) * (1 - p) ** (i - 1) * p,
+}
+
+
+def limite_empirico(
+    caso: str, p: float, k_max: int = 1000, tolerancia: float = 1e-6
+) -> tuple[float, bool, int]:
+    """Suma términos hasta que |S_k - S_(k-1)| < tolerancia o se llega a k_max.
+
+    Devuelve (límite aproximado, si convergió, k usado).
+    """
+    _validar_entrada(p, k_max)
+    termino = TERMINOS[caso]
+    suma = termino(1, p)
+    for k in range(2, k_max + 1):
+        nuevo = termino(k, p)
+        suma += nuevo
+        if abs(nuevo) < tolerancia:
+            return suma, True, k
+    return suma, False, k_max
