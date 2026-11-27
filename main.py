@@ -25,18 +25,17 @@ NOMBRES_CASOS = {
     "C": "Caso C - Red móvil con copia extra",
 }
 K_TABLA = 10
-K_GRAFICO = 40
+K_GRAFICO = 50
 K_LIMITE = 1000
 CAPACIDAD_MAXIMA = 10
+RUT_ELEGIDO = "224630840"
 
 
-def leer_digitos() -> list[int]:
-    """Solicita los primeros ocho dígitos del RUT y valida la entrada."""
-    while True:
-        entrada = input("Ingrese los primeros 8 dígitos del RUT: ").strip().replace(".", "")
-        if entrada.isdigit() and len(entrada) == 8:
-            return [int(digito) for digito in entrada]
-        print("Entrada inválida: deben ser exactamente 8 dígitos.")
+def obtener_digitos_rut() -> list[int]:
+    """Obtiene los primeros ocho dígitos del RUT seleccionado."""
+    if len(RUT_ELEGIDO) != 9 or not RUT_ELEGIDO.isdigit():
+        raise ValueError("RUT_ELEGIDO debe contener 8 dígitos y su dígito verificador.")
+    return [int(digito) for digito in RUT_ELEGIDO[:8]]
 
 
 def imprimir_tablas(
@@ -45,9 +44,13 @@ def imprimir_tablas(
 ) -> None:
     """Imprime las tres tablas de sumas parciales para k de 1 a 10."""
     columnas = tuple(probabilidades)
+    # Encabezado con nombre y valor numérico de cada probabilidad
+    encabezado_probs = "\t".join(
+        f"{clave}={probabilidades[clave]:.4f}" for clave in columnas
+    )
     for caso, nombre in NOMBRES_CASOS.items():
         print(f"\n{nombre}")
-        print("k\t" + "\t".join(columnas))
+        print(f"k\t{encabezado_probs}")
         for indice in range(K_TABLA):
             valores = (
                 f"{sumas_graficadas[caso][probabilidad][indice]:.6f}"
@@ -109,41 +112,59 @@ def imprimir_viabilidad(limites: Mapping[str, Mapping[str, float]]) -> None:
         print(f"{caso}\t" + "\t".join(estados))
 
 
-def imprimir_recomendacion(limites: Mapping[str, Mapping[str, float]]) -> None:
-    """Recomienda una combinación con menor límite que respete C_max."""
+def imprimir_recomendacion(
+    limites: Mapping[str, Mapping[str, float]],
+    convergencias: Mapping[str, Mapping[str, bool]],
+) -> None:
+    """Recomienda la combinación convergente con menor límite que respete C_max."""
     combinaciones = [
-        (caso, probabilidad, limite)
+        (caso, probabilidad, limite, convergencias[caso][probabilidad])
         for caso, limites_caso in limites.items()
         for probabilidad, limite in limites_caso.items()
     ]
     viables = [
         combinacion
         for combinacion in combinaciones
-        if combinacion[2] <= CAPACIDAD_MAXIMA
+        if combinacion[2] <= CAPACIDAD_MAXIMA and combinacion[3]
     ]
 
     print("\nRecomendación")
     if viables:
-        caso, probabilidad, limite = min(viables, key=lambda opcion: opcion[2])
+        caso, probabilidad, limite, _ = min(viables, key=lambda opcion: opcion[2])
         margen = CAPACIDAD_MAXIMA - limite
         print(
             f"Elegir {NOMBRES_CASOS[caso]} con {probabilidad}: "
-            f"su límite aproximado ({limite:.6f}) es el menor entre las "
-            f"combinaciones que cumplen C_max = {CAPACIDAD_MAXIMA}, "
+            f"el reporte empírico la marca CONVERGE con k = {K_LIMITE}, y su "
+            f"límite aproximado ({limite:.6f}) es el menor entre las "
+            f"combinaciones convergentes que cumplen C_max = {CAPACIDAD_MAXIMA}, "
             f"con un margen de {margen:.6f}."
         )
     else:
-        caso, probabilidad, limite = min(combinaciones, key=lambda opcion: opcion[2])
-        print(
-            f"Ninguna combinación cumple C_max = {CAPACIDAD_MAXIMA}. "
-            f"La menor aproximación de límite es {limite:.6f} en "
-            f"{NOMBRES_CASOS[caso]} con {probabilidad}; aun así supera la capacidad, "
-            "por lo que se debe revisar el requisito antes de recomendarla."
-        )
+        convergentes = [
+            combinacion for combinacion in combinaciones if combinacion[3]
+        ]
+        if convergentes:
+            caso, probabilidad, limite, _ = min(
+                convergentes, key=lambda opcion: opcion[2]
+            )
+            print(
+                f"Ninguna combinación convergente cumple C_max = "
+                f"{CAPACIDAD_MAXIMA}. La menor aproximación de límite entre las "
+                f"convergentes es {limite:.6f} en {NOMBRES_CASOS[caso]} con "
+                f"{probabilidad}; supera la capacidad, por lo que no se recomienda."
+            )
+        else:
+            print(
+                f"No se puede recomendar una combinación: no se confirmó la "
+                f"convergencia de ninguna serie hasta k = {K_LIMITE}."
+            )
 
 
 def main() -> None:
-    probabilidades = calcular_probabilidades(leer_digitos())
+    digitos_rut = obtener_digitos_rut()
+    rut_formateado = f"{RUT_ELEGIDO[:2]}.{RUT_ELEGIDO[2:5]}.{RUT_ELEGIDO[5:8]}-{RUT_ELEGIDO[8]}"
+    print(f"RUT utilizado: {rut_formateado}")
+    probabilidades = calcular_probabilidades(digitos_rut)
     print(
         "\nProbabilidades: "
         + ", ".join(f"{clave}={valor:.4f}" for clave, valor in probabilidades.items())
@@ -153,7 +174,7 @@ def main() -> None:
     imprimir_tablas(probabilidades, sumas_graficadas)
     imprimir_reporte(limites, convergencias)
     imprimir_viabilidad(limites)
-    imprimir_recomendacion(limites)
+    imprimir_recomendacion(limites, convergencias)
     graficar_sumatorias(sumas_graficadas, limites)
 
 
